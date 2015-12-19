@@ -71,7 +71,11 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 	hostname := os.Getenv("HOSTNAME")
 	if hostname == "" {
 		log.Println("logstash: Defaulting to container hostname.")
-		hostname = os.Hostname()
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Println("logstash_hostname:", err)
+			continue
+		}
 	}
 
 	for m := range logstream {
@@ -82,6 +86,10 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 
 		// Internal hardcoded multiline. This is terrible, I know.
 		matched, err := regexp.Match("^\\s", []byte(m.Data))
+		if err != nil {
+			log.Println("logstash_regex:", err)
+			continue
+		}
 
 		_, existing := queue[m.Container.ID];
 
@@ -115,14 +123,14 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 		// Mashal the message into JSON.
 		js, err := json.Marshal(finalMessage)
 		if err != nil {
-			log.Println("logstash:", err)
+			log.Println("logstash_marshal:", err)
 			continue
 		}
 
 		// Write the message to the Logstash server.
 		_, err = a.conn.Write(js)
 		if err != nil {
-			log.Println("logstash:", err)
+			log.Println("logstash_write:", err)
 			continue
 		}
 	}
