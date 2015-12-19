@@ -64,19 +64,26 @@ func GetTags (messages []Message) []string {
 	return tags
 }
 
-// Stream implements the router.LogAdapter interface.
-func (a *Adapter) Stream(logstream chan *router.Message) {
-	queue := make(map[string][]Message)
-
+// GetHostname gets the HOSTNAME variable or the container's hostname.
+func GetHostname() string {
 	hostname := os.Getenv("HOSTNAME")
+
 	if hostname == "" {
 		log.Println("logstash: Defaulting to container hostname.")
 		hostname, err := os.Hostname()
 		if err != nil {
 			log.Println("logstash_hostname:", err)
-			continue
 		}
+		return hostname
 	}
+	return hostname
+}
+
+// Stream implements the router.LogAdapter interface.
+func (a *Adapter) Stream(logstream chan *router.Message) {
+	queue := make(map[string][]Message)
+
+	hostname := GetHostname()
 
 	for m := range logstream {
 		rawMessage := Message{
