@@ -48,11 +48,15 @@ func (a *LogstashAdapter) Stream(logstream chan *router.Message) {
 			Hostname: m.Container.Config.Hostname,
 			Stream:   m.Source,
 		}
+
+		// Mashal the message into JSON.
 		js, err := json.Marshal(msg)
 		if err != nil {
 			log.Println("logstash:", err)
 			continue
 		}
+
+		// Write the message to the Logstash server.
 		_, err = a.conn.Write(js)
 		if err != nil {
 			log.Println("logstash:", err)
