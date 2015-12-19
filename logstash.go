@@ -5,22 +5,24 @@ import (
 	"errors"
 	"log"
 	"net"
+	"regexp"
+	"strings"
 
 	"github.com/gliderlabs/logspout/router"
 )
 
 func init() {
-	router.AdapterFactories.Register(NewLogstashAdapter, "logstash")
+	router.AdapterFactories.Register(NewAdapter, "logstash")
 }
 
-// LogstashAdapter is an adapter that streams UDP JSON to Logstash.
-type LogstashAdapter struct {
+// Adapter is an adapter that streams UDP JSON to Logstash.
+type Adapter struct {
 	conn  net.Conn
 	route *router.Route
 }
 
-// NewLogstashAdapter creates a LogstashAdapter with UDP as the default transport.
-func NewLogstashAdapter(route *router.Route) (router.LogAdapter, error) {
+// NewAdapter creates an Adapter with UDP as the default transport.
+func NewAdapter(route *router.Route) (router.LogAdapter, error) {
 	transport, found := router.AdapterTransports.Lookup(route.AdapterTransport("udp"))
 	if !found {
 		return nil, errors.New("unable to find adapter: " + route.Adapter)
@@ -31,16 +33,42 @@ func NewLogstashAdapter(route *router.Route) (router.LogAdapter, error) {
 		return nil, err
 	}
 
-	return &LogstashAdapter{
+	return &Adapter{
 		route: route,
 		conn:  conn,
 	}, nil
 }
 
+// MergeMessages merges an array of Message into a string
+func MergeMessages(messages []Message) string {
+	var strs = make([]string, 0)
+
+	for _, x := range messages {
+		strs = append(strs, x.Message)
+	}
+
+	return strings.Join(strs, "\n")
+}
+
+// GetTags decides if a message array should be tagged multiline.
+func GetTags (messages []Message) []string {
+	var tags = make([]string, 0)
+
+	if len(messages) > 1 {
+		tags = append(tags, "multiline")
+	} else {
+		tags = append(tags, "")
+	}
+
+	return tags
+}
+
 // Stream implements the router.LogAdapter interface.
-func (a *LogstashAdapter) Stream(logstream chan *router.Message) {
+func (a *Adapter) Stream(logstream chan *router.Message) {
+	queue := make(map[string][]Message)
+
 	for m := range logstream {
-		msg := LogstashMessage{
+		rawMessage := Message{
 			Message:  m.Data,
 			Name:     m.Container.Name,
 			ID:       m.Container.ID,
@@ -48,9 +76,41 @@ func (a *LogstashAdapter) Stream(logstream chan *router.Message) {
 			Hostname: m.Container.Config.Hostname,
 			Stream:   m.Source,
 		}
+		finalMessage := Message{}
+
+		// Internal hardcoded multiline. This is terrible, I know.
+		matched, err := regexp.Match("^\\s", []byte(m.Data))
+
+		_, existing := queue[m.Container.ID];
+
+		// Create an empty slice if there is no queue slice.
+		if !existing {
+			queue[m.Container.ID] = []Message{}
+		}
+
+		if matched {
+			queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
+			continue
+		} else {
+			if len(queue[m.Container.ID]) == 0 {
+				queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
+				continue
+			} else {
+				finalMessage = Message{
+					Message: MergeMessages(queue[m.Container.ID]),
+					Name: m.Container.Name,
+					ID: m.Container.ID,
+					Image: m.Container.Config.Image,
+					Hostname: m.Container.Config.Hostname,
+					Stream: m.Source,
+					Tags: GetTags(queue[m.Container.ID]),
+				}
+				queue[m.Container.ID] = []Message{}
+			}
+		}
 
 		// Mashal the message into JSON.
-		js, err := json.Marshal(msg)
+		js, err := json.Marshal(finalMessage)
 		if err != nil {
 			log.Println("logstash:", err)
 			continue
@@ -65,12 +125,13 @@ func (a *LogstashAdapter) Stream(logstream chan *router.Message) {
 	}
 }
 
-// LogstashMessage is a simple JSON input to Logstash.
-type LogstashMessage struct {
-	Message  string `json:"message"`
-	Name     string `json:"container_name"`
-	ID       string `json:"container_id"`
-	Image    string `json:"image_name"`
-	Hostname string `json:"host"`
-	Stream   string `json:"stream"`
+// Message is a simple JSON input to Logstash.
+type Message struct {
+	Message  string   `json:"message"`
+	Name     string   `json:"container_name"`
+	ID       string   `json:"container_id"`
+	Image    string   `json:"image_name"`
+	Hostname string   `json:"host"`
+	Stream   string   `json:"stream"`
+	Tags     []string `json:"tags"`
 }
