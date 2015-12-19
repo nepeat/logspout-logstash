@@ -7,6 +7,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"os"
 
 	"github.com/gliderlabs/logspout/router"
 )
@@ -67,14 +68,15 @@ func GetTags (messages []Message) []string {
 func (a *Adapter) Stream(logstream chan *router.Message) {
 	queue := make(map[string][]Message)
 
+	hostname := os.Getenv("HOSTNAME")
+	if hostname == "" {
+		log.Println("logstash: Defaulting to container hostname.")
+		hostname = os.Hostname()
+	}
+
 	for m := range logstream {
 		rawMessage := Message{
 			Message:  m.Data,
-			Name:     m.Container.Name,
-			ID:       m.Container.ID,
-			Image:    m.Container.Config.Image,
-			Hostname: m.Container.Config.Hostname,
-			Stream:   m.Source,
 		}
 		finalMessage := Message{}
 
@@ -104,6 +106,7 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 					Hostname: m.Container.Config.Hostname,
 					Stream: m.Source,
 					Tags: GetTags(queue[m.Container.ID]),
+					Host: hostname,
 				}
 				queue[m.Container.ID] = []Message{}
 			}
@@ -131,7 +134,8 @@ type Message struct {
 	Name     string   `json:"container_name"`
 	ID       string   `json:"container_id"`
 	Image    string   `json:"image_name"`
-	Hostname string   `json:"host"`
+	Hostname string   `json:"container_hostname"`
+	Host     string   `json:"host"`
 	Stream   string   `json:"stream"`
 	Tags     []string `json:"tags"`
 }
