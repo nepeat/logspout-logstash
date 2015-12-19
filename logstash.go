@@ -113,9 +113,12 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 				queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
 				continue
 			} else {
+				// remove trailing slash from container name
+				containerName := strings.TrimLeft(m.Container.Name, "/")
+
 				finalMessage = Message{
 					Message: MergeMessages(queue[m.Container.ID]),
-					Name: m.Container.Name,
+					Name: containerName,
 					ID: m.Container.ID,
 					Image: m.Container.Config.Image,
 					Hostname: m.Container.Config.Hostname,
