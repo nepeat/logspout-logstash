@@ -16,6 +16,11 @@ func init() {
 	router.AdapterFactories.Register(NewAdapter, "logstash")
 }
 
+var regexps = []*regexp.Regexp{
+	regexp.MustCompile(`\s`),
+	regexp.MustCompile(`line \d+, in .+`),
+}
+
 // Adapter is an adapter that streams UDP JSON to Logstash.
 type Adapter struct {
 	conn  net.Conn
@@ -64,6 +69,17 @@ func GetTags (messages []Message) []string {
 	return tags
 }
 
+// IsMultiline is a function that determines if a string should be in the queue map.
+func IsMultiline(message string) bool {
+	for _, expression := range regexps {
+		if expression.Match([]byte(message)) == true {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // GetHostname gets the HOSTNAME variable or the container's hostname.
 func GetHostname() string {
 	hostname := os.Getenv("HOSTNAME")
@@ -91,13 +107,6 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 		}
 		finalMessage := Message{}
 
-		// Internal hardcoded multiline. This is terrible, I know.
-		matched, err := regexp.Match("^\\s", []byte(m.Data))
-		if err != nil {
-			log.Println("logstash_regex:", err)
-			continue
-		}
-
 		_, existing := queue[m.Container.ID];
 
 		// Create an empty slice if there is no queue slice.
@@ -105,7 +114,7 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 			queue[m.Container.ID] = []Message{}
 		}
 
-		if matched {
+		if IsMultiline(m.Data) {
 			queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
 			continue
 		} else {
