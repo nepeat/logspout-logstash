@@ -17,7 +17,7 @@ func init() {
 }
 
 var regexps = []*regexp.Regexp{
-	regexp.MustCompile(`\s`),
+	regexp.MustCompile(`^\s`),
 	regexp.MustCompile(`line \d+, in .+`),
 }
 
