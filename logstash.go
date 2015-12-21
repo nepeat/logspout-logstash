@@ -114,12 +114,12 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 			queue[m.Container.ID] = []Message{}
 		}
 
+		queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
+
 		if IsMultiline(m.Data) {
-			queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
 			continue
 		} else {
-			if len(queue[m.Container.ID]) == 0 {
-				queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
+			if len(queue[m.Container.ID]) == 1 {
 				continue
 			} else {
 				// remove trailing slash from container name
