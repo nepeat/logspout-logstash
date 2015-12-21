@@ -19,6 +19,7 @@ func init() {
 var regexps = []*regexp.Regexp{
 	regexp.MustCompile(`^\s`),
 	regexp.MustCompile(`line \d+, in .+`),
+	regexp.MustCompile(`Traceback `),
 }
 
 // Adapter is an adapter that streams UDP JSON to Logstash.
@@ -126,6 +127,10 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 			} else {
 				// remove trailing slash from container name
 				containerName := strings.TrimLeft(m.Container.Name, "/")
+
+				if len(messages) > 1 {
+					messages = append(messages, rawMessage)
+				}
 
 				finalMessage = Message{
 					Message: MergeMessages(messages),
