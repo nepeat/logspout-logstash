@@ -107,35 +107,44 @@ func (a *Adapter) Stream(logstream chan *router.Message) {
 		}
 		finalMessage := Message{}
 
-		_, existing := queue[m.Container.ID];
+		messages, existing := queue[m.Container.ID];
 
 		// Create an empty slice if there is no queue slice.
 		if !existing {
-			queue[m.Container.ID] = []Message{}
+			messages = []Message{}
 		}
 
-		queue[m.Container.ID] = append(queue[m.Container.ID], rawMessage)
-
 		if IsMultiline(m.Data) {
+			messages = append(messages, rawMessage)
+			queue[m.Container.ID] = messages;
 			continue
 		} else {
-			if len(queue[m.Container.ID]) == 1 {
+			if len(queue[m.Container.ID]) == 0 {
+				messages = append(messages, rawMessage)
+				queue[m.Container.ID] = messages;
 				continue
 			} else {
 				// remove trailing slash from container name
 				containerName := strings.TrimLeft(m.Container.Name, "/")
 
 				finalMessage = Message{
-					Message: MergeMessages(queue[m.Container.ID]),
+					Message: MergeMessages(messages),
 					Name: containerName,
 					ID: m.Container.ID,
 					Image: m.Container.Config.Image,
 					Hostname: m.Container.Config.Hostname,
 					Stream: m.Source,
-					Tags: GetTags(queue[m.Container.ID]),
+					Tags: GetTags(messages),
 					Host: hostname,
 				}
-				queue[m.Container.ID] = []Message{}
+				
+				if len(messages) == 1 && !IsMultiline(messages[0].Message) {
+					messages = []Message{rawMessage}
+				} else {
+					messages = []Message{}
+				}
+
+				queue[m.Container.ID] = messages;
 			}
 		}
 
