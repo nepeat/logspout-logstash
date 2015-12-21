@@ -17,9 +17,10 @@ func init() {
 }
 
 var regexps = []*regexp.Regexp{
-	regexp.MustCompile(`^\s`),
-	regexp.MustCompile(`line \d+, in .+`),
-	regexp.MustCompile(`Traceback `),
+	regexp.MustCompile(`^\s`), // The indentation for a single traceback
+	regexp.MustCompile(`line \d+, in .+`), // line 1, in example
+	regexp.MustCompile(`Traceback `), // Traceback (most recent call last):
+	regexp.MustCompile(`LINE \d+:`), // LINE 1: <SQL STATEMENT>
 }
 
 // Adapter is an adapter that streams UDP JSON to Logstash.
